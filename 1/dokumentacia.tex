@@ -1,0 +1,41 @@
+\documentclass{homework}
+\usepackage[utf8]{inputenc}
+
+
+
+\newcommand{\hwname}{Tomáš Sasák}
+\newcommand{\hwemail}{xsasak01}
+\newcommand{\hwtype}{Klient pre OpenWeatherMap API}
+\newcommand{\hwclass}{IPK}
+
+\begin{document}
+	\maketitle
+	\setcounter{questionCounter}{0}
+	\renewcommand{\questiontype}{Popis funkcionality}
+	\question
+		Súbor Makefile príjme parametre zo vstupu (STDIN) a predá ich klient programu. Parametre musia 		byť zadané v postupnosti \verb|api_key|=<klúč pre api> a \verb|city|=<mesto>. Klient skontroluje 				parametre a zavolá funkciu \verb|request_json(apiKey, apiCity)|, ktorá vracia kód odpovede protokolu HTTP a informáciu o počasí v forme JSON súboru. V tejto funkcií vytvorí socket a pomocou tohoto socketu, nadviaže spojenie s serverom pre 						OpenWeatherMap API. V prípade neuspešného nadviazania spojenia so serverom, klient sa ukončuje 		a navracia chybový kód 1. Pri úspešnom nadviazaní spojenia, je vytvorený požiadavok pre protokol HTTP zavolaním funkcie \verb|get_http_request(key, city)|, ktorá vráti string so správne naformátovaným HTTP požiadavkom. Tento požiadavok, zašle socket na server a očakáva odpoveď. Ak klient nedostane odpoveď, klient sa ukončuje a navracia chybový kód 1. Po príjmutí odpovede, je odpoveď rozdelená na HTTP hlavičku odpovede a informácie v JSON súbore. Následovne je skontrolovaná HTTP odpoveď vo funkcií \verb|check_http_response(apiHTTP)|, ktorá ak odpoveď HTTP nebola kódu 200, ukončuje beh klienta a navracia chybový kód 2. JSON odpoveď od API sa posiela do funkcie pre výpis aktuálneho počasia, funkcie \verb|show_weather(apiJson)|. Táto funkcia pomocou dátovej štruktúry \verb|dictionary|, vyberá informácie zo JSON súboru a vypisuje ich na štandartný výstup (STDOUT). Môže nastať stav, pri ktorom API neodošle konkrétnu informáciu o počasí (napr.: Nedokáže namerať, sklon vetra), pri tomto stave je chytená výnimka chýbajúcej informácie a hodnota sa nahradí "-" znakom (ASCII hodnota: 45). Po vypísaní informácií, sa klient ukončuje s návratovou hodnotou 0.
+	
+	\renewcommand{\questiontype}{Použité knižnice}
+	\question
+	Klient používa nasledujúce knižnice.	
+	
+	\begin{description}
+  		\item[$\bullet$] \verb|sys| - Pre spracovanie argumentov zo štandartného vstupu.
+  		\item[$\bullet$] \verb|socket| - Pre vytvorenie a prácu so socketom.
+  		\item[$\bullet$] \verb|json| - Pre spracovanie a prácu s súborom JSON.
+	\end{description}	
+	
+	\renewcommand{\questiontype}{Príklady spustenia}
+	\question
+	\begin{verbatim}
+	$make run api_key=<api klúč> city="Dubnica nad Váhom"
+	Dubnica nad Váhom , SK
+	broken clouds
+	Temperature: 1.5 °C
+	Humidity: 89 %
+	Pressure: 1025 hpa
+	Wind: 1.8 km/h
+	Wind degree: - 
+	\end{verbatim}	
+	Tu je presne vidieť stav, ktorý môže nastať pri výpadku informácie, viz. \verb|[1.]|.
+\end{document}

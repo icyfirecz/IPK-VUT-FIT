@@ -62,29 +62,29 @@ def show_weather(apiJson):
         print("-")
     
     try:
-        print("temp:", apiJson["main"]["temp"], "°C")
+        print("Temperature:", apiJson["main"]["temp"], "°C")
     except Exception:
-        print("temp: - °C")
+        print("Temperature: - °C")
     
     try:
-        print("humidity:", apiJson["main"]["humidity"], "%")
+        print("Humidity:", apiJson["main"]["humidity"], "%")
     except Exception:
-        print("humidity: - %")
+        print("Humidity: - %")
     
     try:
-        print("pressure:", apiJson["main"]["pressure"], "hpa")
+        print("Pressure:", apiJson["main"]["pressure"], "hpa")
     except Exception:
-        print("pressure: - hpa")
+        print("Pressure: - hpa")
 
     try:
-        print("wind:", (3600/1000)*(apiJson["wind"]["speed"]), "km/h")
+        print("Wind:", (3600/1000)*(apiJson["wind"]["speed"]), "km/h")
     except Exception:
-        print("wind: - km/h")
+        print("Wind: - km/h")
     
     try:
-        print("wind degree:", apiJson["wind"]["deg"])
+        print("Wind degree:", apiJson["wind"]["deg"])
     except Exception:
-        print("wind degree: - ") 
+        print("Wind degree: - ") 
 
 if len(sys.argv) != 3:
     sys.exit("Error, wrong number of parameters.")
