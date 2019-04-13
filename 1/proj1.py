@@ -19,8 +19,9 @@ def create_HTTP_request(key, city):
     Function checks if the HTTP transaction was successful.
 """
 def check_HTTP_reponse(response):
-    if response != "HTTP/1.1 200 OK\r":
-        sys.exit("Error, cannot reach communication with API.")
+    response = response[9:]
+    if response != "200 OK\r":
+        sys.exit(F"Error, cannot reach communication with API.\nHTTP response: {response}")
 
 """
     Function creates socket and asks the API for JSON with data.
