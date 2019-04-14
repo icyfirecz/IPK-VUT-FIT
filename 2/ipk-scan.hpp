@@ -19,6 +19,8 @@
 #include <ifaddrs.h>
 #include <thread>
 #include <net/if.h>
+#include <mutex>
+#include <cstdlib>
 #include "pseudo_headers.hpp"
 #include "ipv6.hpp"
 
@@ -83,6 +85,8 @@ class Scanner
         void send_tcp_packets();
         void start_rst_pcap_loop();
         void start_syn_ack_pcap_loop();
+        void start_rst_ipv6_pcap_loop();
+        void start_syn_ack_ipv6_pcap_loop();
         void start_tcp_scan();
         void prepare_and_start_tcp_scan();
         Scanner();

@@ -13,8 +13,8 @@ struct pseudo_header_csum_tcp
 
 struct pseudo_header_csum_udp
 {
-    unsigned int sourceAddress;
-    unsigned int destinationAddress;
+    unsigned char sourceAddress[16];
+    unsigned char destinationAddress[16];
     unsigned char reserved;
     unsigned char protocolType;
     unsigned short length;

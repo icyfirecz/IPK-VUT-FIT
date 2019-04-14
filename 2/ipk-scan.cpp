@@ -238,7 +238,16 @@ void Scanner::fetch_target_IP()
 
     struct addrinfo hints;
     memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
+
+    if(this->wasInterface)
+    {
+        hints.ai_family = this->localIpFamily;
+    }
+    else
+    {
+        hints.ai_family = AF_UNSPEC;
+    }
+    
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_protocol = 0;
 
