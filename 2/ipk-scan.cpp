@@ -1,20 +1,19 @@
+// Project for subject Computer Communications and Networks
+// TCP/UDP port scanner
+// Author: Tomáš Sasák
+// BUT FIT 2019
+
 #include "ipk-scan.hpp"
 
-// Method for error handling.
-// errorMessage - Message error, which is going to get printed.
-// errCode - Number of code that is going to be returned.
 void Scanner::print_error_exit(string errorMessage, int errCode)
 {
     cerr << errorMessage;
     exit(errCode);
 }
 
-// Method is implementation explode from PHP.
-// String is splitted into vector by delimeter.
-// content - string that will be splitted
-// delimeter - delimeter
 vector<string> Scanner::explode(string content, char delimeter)
 {
+    // Result vector
     vector<string> tokens;
     stringstream data(content);
 
@@ -28,32 +27,37 @@ vector<string> Scanner::explode(string content, char delimeter)
     return tokens;
 }
 
-// Method parses the ports from unformated string from command
-// line, to the vector of number of ports.
-// unformatedPorts - unformated string of ports
 vector<int> Scanner::parse_ports_range(string unformatedPorts)
 {
-    // Regex for ports: 1-65535
+    // Regex for ports: 0-65535
     regex_t regex;
 
+    // Create regex
     if (regcomp(&regex, "^[0-9]{1,5}+-[0-9]{1,5}+$", REG_EXTENDED) != 0)
     {
         cout << "rip regex\n";
         exit(1);
     }
 
+    // Execute the regex
     if (regexec(&regex, unformatedPorts.c_str(), 0, NULL, 0) == 0)
     {
+        // Split the numbers by range
         vector<string> portsString = this->explode(unformatedPorts, '-');
 
+        // Lower limit port
         int startingPort = atoi(portsString[0].c_str());
+
+        // Upper limit port
         int endingPort = atoi(portsString[1].c_str());
 
+        // Check numbers
         if (startingPort > endingPort || startingPort > MAX_PORT_NUMBER || endingPort > MAX_PORT_NUMBER)
         {
             this->print_error_exit("Error, wrong order/number of requested ports!\n", 1);
         }
 
+        // Fill the vector with port numbers in ranges
         vector<int> ports;
         for (; startingPort <= endingPort; startingPort++)
         {
@@ -69,9 +73,9 @@ vector<int> Scanner::parse_ports_range(string unformatedPorts)
     regex_t regex2;
     if (regcomp(&regex2, "^[0-9]{1,5}(,[0-9]{1,5})*$", REG_EXTENDED) != 0)
     {
-        cout << "rip regex\n";
-        exit(1);
+        this->print_error_exit("Cannot create regex!\n", 1);
     }
+
     // Regex for ports: 1,2,420,1337,65535
     if (regexec(&regex2, unformatedPorts.c_str(), 0, NULL, 0) == 0)
     {
@@ -100,7 +104,6 @@ vector<int> Scanner::parse_ports_range(string unformatedPorts)
     return ThisIsDeadCode;
 }
 
-// Method parses given interface from command line.
 void Scanner::parse_interface(string interface)
 {
     struct ifaddrs *interfaces;
@@ -110,6 +113,7 @@ void Scanner::parse_interface(string interface)
 
     backup = interfaces;
 
+    // Search the interface
     while (interfaces != NULL)
     {
         if (strcasecmp(interfaces->ifa_name, interface.c_str()) == 0 && interfaces->ifa_addr->sa_family != AF_PACKET)
@@ -118,15 +122,21 @@ void Scanner::parse_interface(string interface)
         interfaces = interfaces->ifa_next;
     }
 
+    // No interface with given name found
     if (interfaces == NULL)
     {
         this->print_error_exit("Error, given interface was not found!\n", 1);
     }
 
+    // Copy its IP family
     this->localIpFamily = interfaces->ifa_addr->sa_family;
+    // User gave interface
     this->wasInterface = true;
+
+    // Copy name of the interface
     this->interfaceName = interface;
 
+    // Get the interface IP
     if (this->localIpFamily == AF_INET || this->localIpFamily == AF_INET6)
     {
         this->localIpFamily = interfaces->ifa_addr->sa_family;
@@ -146,22 +156,25 @@ void Scanner::parse_interface(string interface)
         this->print_error_exit("Error, given interface is not ipv4 or ipv6.\n", 1);
     }
 
+    // Free
     freeifaddrs(backup);
 }
 
-// Method parses arguments from command line and sets up
-// Scanner attributes.
 void Scanner::parse_arguments(int argc, char *argv[])
 {
     int option;
 
+    // Options for arguments
     static struct option long_options[] =
         {
             {"pt", required_argument, &option, PT_ARGUMENT},
             {"pu", required_argument, &option, PU_ARGUMENT},
             {"i", required_argument, &option, I_ARGUMENT},
             {"wu", required_argument, &option, WU_ARGUMENT},
-            {"wt", required_argument, &option, WT_ARGUMENT}};
+            {"wt", required_argument, &option, WT_ARGUMENT},
+            {"ru", required_argument, &option, RU_ARGUMENT},
+            {"rt", required_argument, &option, RT_ARGUMENT}
+        };
 
     while ((getopt_long_only(argc, argv, "", long_options, &option) != -1))
     {
@@ -182,11 +195,22 @@ void Scanner::parse_arguments(int argc, char *argv[])
         case WT_ARGUMENT:
             this->tcpWaitTime = stof(optarg);
             break;
+        case RU_ARGUMENT:
+            this->timesRepeatUdp = stoi(optarg);
+            // 1ST SENDING IS DEFAULT, NEED TO ADD ONE MORE!
+            this->timesRepeatUdp++;
+            break;
+        case RT_ARGUMENT:
+            this->timesRepeatTcp = stoi(optarg);
+            // 1ST SENDING IS DEFAULT, NEED TO ADD ONE MORE!
+            this->timesRepeatTcp++;
+            break;
         default:
             this->print_error_exit("Error, wrong argument switch!\n", 1);
         }
     }
 
+    // Unknown arguments check
     if ((optind + 1) != argc)
     {
         this->print_error_exit("Error, wrong number of arguments!\n", 1);
@@ -197,6 +221,7 @@ void Scanner::parse_arguments(int argc, char *argv[])
 
 void Scanner::fetch_local_ip()
 {
+    // If interface was given, scanner already has local IP
     if (wasInterface)
         return;
 
@@ -205,13 +230,18 @@ void Scanner::fetch_local_ip()
 
     device = devices;
 
+    // Search all devices
     while (device != NULL)
     {
+        // If device is up running, it is not loopback and his IP family is same as IP family of the target
         if ((device->ifa_flags & IFF_UP) != 0 and strcasecmp(device->ifa_name, "lo") != 0 and device->ifa_addr->sa_family == this->targetIpFamily)
         {
+            // Copy just family, it must be the same
             this->localIpFamily = this->targetIpFamily;
+            // If it is IPV4 or IPV6
             if (this->localIpFamily == AF_INET || this->localIpFamily == AF_INET6)
             {
+                // Parse the local IP
                 int error = getnameinfo(device->ifa_addr,
                                         (this->localIpFamily == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6),
                                         this->localIp, NI_MAXHOST,
@@ -226,12 +256,14 @@ void Scanner::fetch_local_ip()
         device = device->ifa_next;
     }
 
+    // If null no suitable interface was found
     if (device == NULL)
     {
         this->print_error_exit("Error, no interface found!\n", 1);
     }
 }
-// Method fetches the IP address of the user's target.
+
+
 void Scanner::fetch_target_IP()
 {
     struct addrinfo *result = NULL;
@@ -239,10 +271,12 @@ void Scanner::fetch_target_IP()
     struct addrinfo hints;
     memset(&hints, 0, sizeof(hints));
 
+    // If interface was given, scanner must find the same ip family as interface ip family
     if(this->wasInterface)
     {
         hints.ai_family = this->localIpFamily;
     }
+    // No interface was given, no specific ip family is requested
     else
     {
         hints.ai_family = AF_UNSPEC;
@@ -251,27 +285,31 @@ void Scanner::fetch_target_IP()
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_protocol = 0;
 
+    // Get address info
     if (getaddrinfo(this->targetByInput.c_str(), NULL, &hints, &result) != 0)
     {
         this->print_error_exit("Error, cannot fetch target service!\n Check if your interface IP family corresponds with target ip family!\n", 1);
     }
 
     void *addressPointer;
-    char IPaddress[100];
+    char IPaddress[100]; // Ugly trick to convert C string to C++
 
     switch (result->ai_family)
     {
-    case AF_INET:
-        addressPointer = &((struct sockaddr_in *)result->ai_addr)->sin_addr;
-        this->targetIpFamily = AF_INET;
-        break;
-    case AF_INET6:
-        addressPointer = &((struct sockaddr_in6 *)result->ai_addr)->sin6_addr;
-        this->targetIpFamily = AF_INET6;
-        break;
-    default:
-        this->print_error_exit("Unknown error in getting IP.\n", 1);
+        // IPV4
+        case AF_INET:
+            addressPointer = &((struct sockaddr_in *)result->ai_addr)->sin_addr;
+            this->targetIpFamily = AF_INET;
+            break;
+        case AF_INET6:
+        // IPV6
+            addressPointer = &((struct sockaddr_in6 *)result->ai_addr)->sin6_addr;
+            this->targetIpFamily = AF_INET6;
+            break;
+        default:
+            this->print_error_exit("Unknown error in getting IP.\n", 1);
     }
+
 
     inet_ntop(result->ai_family, addressPointer, IPaddress, 100);
     this->targetIp = IPaddress;
@@ -281,13 +319,23 @@ void Scanner::fetch_target_IP()
     freeaddrinfo(result);
 }
 
-// Scanner contructor
 Scanner::Scanner()
 {
+    // Default setting
     this->wasInterface = false;
+
+    // Clear out
     memset(&this->localIp, 0, sizeof(this->localIp));
-    this->icmpWaitTime = 1;
-    this->tcpWaitTime = 1;
+    
+    // Default setting, wait 2 seconds for the respond from port
+    this->icmpWaitTime = 2;
+    this->tcpWaitTime = 2;
+
+    // Repeat sending if filtered/open again one time
+    // (1ST TIME IS DEFAULT)
+    // 2-1 = 1 wow
+    this->timesRepeatTcp = 2;
+    this->timesRepeatUdp = 2;
 }
 
 int main(int argc, char *argv[])

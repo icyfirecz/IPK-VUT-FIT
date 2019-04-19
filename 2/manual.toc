@@ -1,0 +1,14 @@
+\contentsline {section}{\numberline {1}\IeC {\'U}vod do problematiky}{2}
+\contentsline {subsection}{\numberline {1.1}UDP skenovanie}{2}
+\contentsline {subsection}{\numberline {1.2}TCP skenovanie}{2}
+\contentsline {section}{\numberline {2}Implement\IeC {\'a}cia}{3}
+\contentsline {subsection}{\numberline {2.1}S\IeC {\'u}bory projektu}{3}
+\contentsline {subsection}{\numberline {2.2}Pou\IeC {\v z}it\IeC {\'e} kni\IeC {\v z}nice}{3}
+\contentsline {subsection}{\numberline {2.3}ipk-scan.cpp}{4}
+\contentsline {subsection}{\numberline {2.4}Vyp\IeC {\'l}\IeC {\v n}anie paket hlavi\IeC {\v c}iek}{4}
+\contentsline {subsection}{\numberline {2.5}udp.cpp}{5}
+\contentsline {subsection}{\numberline {2.6}tcp.cpp}{6}
+\contentsline {section}{\numberline {3}Implementovan\IeC {\'e} roz\IeC {\v s}\IeC {\'\i }renia}{8}
+\contentsline {subsection}{\numberline {3.1}Po\IeC {\v c}et op\IeC {\"a}tovn\IeC {\'y}ch zasielan\IeC {\'\i } TCP/UDP paketu}{8}
+\contentsline {subsection}{\numberline {3.2}Doba \IeC {\v c}akania na odpove\IeC {\v d} od portu}{8}
+\contentsline {section}{\numberline {4}Pou\IeC {\v z}it\IeC {\'e} materi\IeC {\'a}ly}{9}

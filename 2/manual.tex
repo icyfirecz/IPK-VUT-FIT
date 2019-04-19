@@ -1,0 +1,178 @@
+\documentclass[titlepage]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage{indentfirst}
+\usepackage{url}
+
+\begin{document}
+
+% title page
+\title{Scanner sieťových služieb - Varianta OMEGA}
+\author{Tomáš Sasák}
+\maketitle
+
+% Contents
+\tableofcontents
+\newpage
+
+\section{Úvod do problematiky}
+Zadanie je nasledujúce, implementujte sieťový TCP/UDP skener v jazyku C/C++. Program oskenuje IP adresu a porty. Na standartný výstup vypíše, v akom stave sa porty nachádzajú.
+\subsection{UDP skenovanie}
+Pri UDP skenovaní, očakávame pri zavretom porte správu protokolom ICMP typu 3. Všetko ostatné považujeme, ako otvorené.
+\subsection{TCP skenovanie}
+Pri TCP skenovaní, sa posiela SYN paket, ale neprebieha 3-way-handshake. Ak príde odpoveď typu RST, port sa považuje za zatvorený, ak odpoveď typu SYN-ACK považuje sa za otvorený a ak nepríde žiadna odpoveď, je nutné poslať nový SYN paket, slúžiaci pre overenie, či sa predchádzajúci SYN paket nestratil.
+
+\newpage
+\section{Implementácia}
+Vybraný jazyk pre implementáciu tohoto projektu je jazyk \verb|C++|. Projekt bol implementovaný pomocou objektovo-orientovaného programovania. Celý projekt je zabalený do jednej triedy, táto trieda má meno \verb|Scanner|.
+ \par Pre odosielanie skenovaích paketov boli použité BSD sockety. Tieto sockety sú nastavené na RAW a protokol \verb|IPv4| alebo \verb|IPv6|. Taktiež, pri socketoch patriace pod \verb|IPv4| je použité nastavenie definované pre socket \verb|IP_HDRINCL|, ktoré znamená, že \verb|IPv4| hlavička je vytváraná aplikáciou a neni potrebné od kernelu, aby vytváral vlastnú. Pre \verb|IPv6| sa mi nepodarilo nájsť podobné nastavenie, čo je dôsledok toho, že pri skenovaní \verb|IPv6| adries je \verb|IPv6| hlavička zostavená pomocou kernelu.
+ \par Z predchádzajúceho odseku vyplýva, že najskôr je zostavená \verb|IPv4| paket hlavička a následovne za tým je zostavená \verb|UDP| alebo \verb|TCP| paket hlavička. Pri \verb|IPv6|, je zostavená len \verb|UDP| alebo \verb|TCP| paket hlavička.
+
+\subsection{Súbory projektu}
+Skener sa skladá z nasledujúcich súborov.
+
+\begin{itemize}
+	\item \verb|ipk-scan.hpp| - Deklarácie triedy a metód skeneru, použité knižnice, definované číselné makrá a poriadne dokumentované elementy.
+	\item \verb|ipk-scan.cpp| - Srdce skeneru, implementácia spracovávania argumentov a následovne spúšťanie \verb|TCP| a \verb|UDP| skenovania.
+	\item \verb|tcp.cpp| - Implementácia \verb|TCP| skenovania a výpis výsledkov \verb|TCP| skenovania.
+	\item \verb|udp.cpp| - Implementácia \verb|UDP| skenovania a výpis výsledkov \verb|UDP| skenovania.
+	\item \verb|pseudo-headers.cpp| - Definícia štruktúry, použitá pre počítanie \verb|TCP| checksum.
+\end{itemize}
+
+\subsection{Použité knižnice}
+V nasledujúcom v liste, sa nachádza výpis použitých knižníc pre implementáciu tohoto projektu (základné knižnice pre prácu s \verb|C++| a \verb|C| sa v liste nenachádzajú).
+
+\begin{itemize}
+	\item \verb|pcap.h| - Knižnica použitá, pre odchytávanie odpovedí od skenovaného portu.
+	\item \verb|thread| - Knižnica použitá, pre viacvláknové programovanie (vysvetlenie neskôr).
+	\item \verb|mutex| - Knižnica použitá, pre viacvláknové programovanie a synchronizáciu vlákien.
+	\item \verb|netinet/ip.h, netinet/udp.h, netinet/tcp.h| - Knižnice použité, pre použitie už definovaných hlavičiek \verb|UDP|, \verb|TCP| a \verb|IP| packetov.
+	\item \verb|netinet/if.h| - Knižnica použitá, pre vyhľadávanie zariadení (interface).
+	\item \verb|netdb.h| - Knižnica použitá, pre preklade domény na \verb|IP| adresu.
+	\item \verb|regex.h| - Knižnica použitá, pre správne spracovávanie argumentov.
+\end{itemize}
+
+\subsection{ipk-scan.cpp}
+Jadro skeneru, na počiatku spracuje parametre funkcia \verb|void Scanner::parse_arguments| pomocou funkcie \verb|getopt_long_only| a naplní atribúty inštancie objektu \verb|Scanner|. \par 
+
+Druhý krok, je získanie \verb|IP| adresy skenovaného cielu. Ak bolo špecifikované zariadenie, vyhľadáva sa explicitne \verb|IP| adresa typu založeného na tom, akú \verb|IP| adresu toto zariadenie vlastní. Ak zariadenie nebolo zadané, vyberá sa prvá nalezená adresa. To znamená, že prednosť má vždy \verb|IPv6| adresa pred \verb|IPv4| adresou. Adresa sa vyhľadáva pomocou funkcie \verb|getaddrinfo| a preferovaná adresa sa predáva pomocou štruktúry \verb|hints|.\par
+
+Ako nasledujúci krok, je načítavanie lokálnej adresy a interface \break (funkcia \verb|void Scanner::fetch_local_ip|). Ak bolo zadané zariadenie od uživatela (interface), tak funkcia končí, pretože spracovávanie zadaného zariadenia má na starosti funkcia pre spracovávanie argumentov. Ak zariadenie nebolo zadané, pomocou funkcie \verb|getifaddrs|, sa skener pýta kernelu pre list existujúcich zariadení a vyberá sa prvé zariadenie ktoré funguje, nemá loopback adresu a jeho \verb|IP| adresa má zhodujúcu skupinu (4 alebo 6). Adresa zariadenia je ešte prekladaná pomocu \verb|getnameinfo|, aby skener mohol \verb|IP| paket hlavičku vyplniť správnymi údajmi. \par
+
+Týmito krokmi, je práca tejto časti skenera hotová a prechádza úloha skenovania portov. Tieto vlastnosti sú naimplementované v nasledujúcich súboroch.
+
+\subsection{Vypĺňanie paket hlavičiek}
+Pri skenovaných portoch na adresách \verb|IPv4|, je nutné vyplniť \verb|IPv4| hlavičku. Pri nastavení socketu použitím \verb|IP_HDRINCL| je zaručené, že kernel bude brať hlavičku poskytnutú aplikáciou. Táto hlavička je vyplnená zdrojovou adresou, cielovou adresou, počtom hopov, veľkosťou, typom ďalšieho protokolu v datagrame a typom tejto \verb|IP| (4/6). Checksum nieje potrebné rátať pri IPv4, toto zaručuje kernel ak checksum hodnota je nastavená na hodnotu 0. (viz. \cite{rfc791})\par 
+Pri skenovaných portoch na adresách \verb|IPv6|, neni potrebné vyplniť \verb|IPv6| hlavičku. A je automaticky vyplnená kernelom. \par 
+Pri skenovaných portoch pomocou protokolu \verb|UDP|, je nutné vyplniť \verb|UDP| hlavičku. Hlavička je vyplnená zdrojovým portom, cielovým portom, velkosťou a checksum pri IPv4 je nastavený na 0 (IPv4 checksum je vypočítaný, nieje potrebné počítať UDP checksum). Pri \verb|IPv6| je už potrebné vyrátať \verb|UDP| checksum, pretože \verb|IPv6| hlavička neobsahuje checksum. Toto je vyriešené pomocou socketového nastavenia \verb|IPV6_CHECKSUM|, ktorému pri zadanom offsete (tam kde sa nachádza v hlavičke hodnota checksum), dokáže vyrátať checksum sám a vloží túto hodnotu do hlavičky na daný offset. (viz. \cite{rfc768})\par 
+Pri skenovaných portoch pomocou protokolu \verb|TCP|, je nutné vyplniť \verb|TCP| hlavičku. Hlavička je vyplnená zdrojovým portom, cielovým portom, veľkosťou, sekvenčným číslom, predchádzajúcim sekvenčným číslom, offsetom, potrebnými flagmi, veľkosťou okna, a checksumom. Pri \verb|IPv4| je nutné tento TCP checksum vypočítať, toto je vykonané pomocou pseudo-hlavičky a checksum funkcie (viz. \cite{rfc1071}, \cite{checksum}, \cite{veselyguide}). Pri \verb|IPv6| je opäť možné, požiadať kernel pomocou offsetu a nastavenia \verb|IPV6_CHECKSUM| o výpočet checksum automaticky (viz. \cite{rfc793}).
+
+\subsection{udp.cpp}
+Vyžiadané skenované porty, sú uložené v atribúte triedy \verb|Scanner| a to vo vektore \verb|udpTargetPorts|. Ak je vektor prázdny, skenovanie neprebieha a funkcia končí.\par
+
+Ako prvé, sa vytvorí \verb|ICMP (UDP)| paketový odchytávač. Toto je realizované pomocou knižnice \verb|libpcap|. Vytvorí sa odchytávač, buď na zadanom zariadení, alebo na zariadení ktoré si skener vybral sám. Následovne sa na odchytávač, prichytí nasledujúci filter:\newline
+Pre IPv4:
+\begin{verbatim}
+icmp[icmpcode] = 3 and src ...
+\end{verbatim}
+Pre IPv6:
+\begin{verbatim}
+icmp6 && ip6[40] == 1 and src ...
+\end{verbatim}
+
+Tri bodky značí adresa cielu skenu. Tento filter odchytáva \verb|ICMP (UDP)| pakety, typu port unreachable. \par
+Tento vytvorený odchytávač, je uložený do inštancie triedy \verb|Scanner|. Následuje odosielanie skenovacích paketov a odchytávanie odpovede. Toto je implementované pomocou viacvláknového programovania. V tomto okamihu sa vytvára, nové vlákno ktoré odosiela pakety a hlavné vlákno na ktorom odchytáva \verb|ICMP| pakety daný odchytávač. Priebeh je následovný. \par 
+Hlavné (odchytávacie) vlákno pomocou \verb|pcap_loop| a daného odchytávača začne odchytávať pakety, pomocou callback funkcie \verb|callback_udp| dokáže informovať, odosielacie vlákno, že daný port je zatvorený. Existuje tu globálna premenná, menom \verb|bool wasClosed|. Ktorú ak odchytávač, zavolá callback, zmení na hodnotu \verb|True|. Medzitým v odosielaciom vlákne sa vytvorí socket, nastaví sa a odosielač, si zostaví paket (v tomto prípade UDP) a odosiela paket po jednom na port daný indexom v vektore \verb|udpTargetPorts| a čaká štandartne (viz. Implementované rozšírenia) 2 sekundy na odpoveď. Po danom čase, nazrie do premennej \verb|wasClosed| a na základe jej hodnoty vypíše, či daný port je zatvorený alebo otvorený. Ak nastené prípad, že port je otvorený, štandartne odosielač odosiela znova 1 \verb|UDP| packet (viz. Implementované rozšírenia) aby sa overilo, či sa daný paket nestratil a port je skutočne otvorený.\par
+
+Tu sú vidieť, príznaky zlého synchronizovania a to presnejšie príznaku "data race". Toto je ale ošetrené pomocou \verb|mutex udpLock|, čím je zaistené že len jedno vlákno môže pristupovať zaráz ku premennej \verb|wasClosed|. 
+Ak port neodpovedal \verb|ICMP|\par
+
+Po dokončení odosielania a prímania paketov, odosielacie vlákno ukončuje odchytávanie filtru pomocu \verb|pcap_breakloop| a hlavné vlákno čaká na dokončenie odosielacieho vlákna pomocou \verb|join|.
+
+\subsection{tcp.cpp}
+Vyžiadné skenované porty(\verb|TCP|), sú uložené v atribúte triedy \verb|Scanner| a to vo vektore \verb|tcpTargetPorts|. Ak je vektor prázdny, skenovanie neprebieha a funkcia končí.\par 
+
+Postup je velmi podobný, ako v prípade \verb|UDP| skenovania. Ako prvé, sa vytvoria dva odchatývače, \verb|TCP RST| odchytávač a \verb|TCP SYN-ACK| odchytávač. Na odchytávače, sa umiestnia nasledujúce filtre: \newline
+Pre IPv4 a RST:
+\begin{verbatim}
+tcp[tcpflags] & (tcp-rst) != 0 and src ...
+\end{verbatim}
+Pre IPv6 a RST:
+\begin{verbatim}
+((ip6[6] == 6 && ip6[53] & 0x04 == 0x04) || (ip6[6] == 6 && 
+tcp[13] & 0x04 == 0x04)) and src ...
+\end{verbatim}
+Pre IPv4 a SYN-ACK:
+\begin{verbatim}
+tcp[tcpflags] & (tcp-syn|tcp-ack) != 0 or tcp[tcpflags] & 
+(tcp-syn) != 0 and tcp[tcpflags] & (tcp-rst) = 0 and src 
+\end{verbatim}
+Pre IPv6 a SYN-ACK:
+\begin{verbatim}
+((tcp[13] & 0x12 == 0x12) || (ip6[6] == 6 && ip6[53] & 0x12 == 0x12)) 
+|| ((tcp[13] & 0x02 == 0x02) || (ip6[6] == 6 && ip6[53] & 0x02 == 0x02)) 
+and src ...
+\end{verbatim}
+
+Tri bodky značia adresu ciela skenu. \par 
+
+Tieto vytvorené odchytávače, sú uložené do inštancie triedy \verb|Scanner|. Následuje opäť odosielanie paketov a odchýtávanie odpovedí. Toto je veľmi podobne naimplementované, ako pri \verb|UDP|. Ale s rozdielom, že odchytávač nieje v hlavnom vlákne, ale odchytávače majú svoje vlastné vlákno. Pribeh je následovný.\par
+
+Odchytávačom sa vytvoria samostatné procesy, ktoré sú vždy dva. Jeden slúžiaci pre odchytávanie \verb|RST TCP| paketov a druhý pre odchytávanie \verb|SYN-ACK TCP| paketov. Tieto odchytávače začnú odchytávať dané pakety pomocu \verb|pcap_loop| a cez callback funkcie, oznamujú odosielaciemu vláknu aký paket dostali. Táto komunikácia je opäť vyriešená, pomocou globálnej premennej \verb|int tcpPortStates| a rovnako v prevencií "data race" je využitý \verb|mutex tcpLock|. Vzhľadom na to, že v tomto prípade môže byť viac stavov portu, ako len otvorený a zatvorený, používajú sa tu číselné makrá vytvorené v súbore \verb|ipk-scan.hpp|, sú to makrá \verb|TCP_CLOSED|, \verb|TCP_OPEN| a \verb|TCP_FILTERED|. \par 
+Odosielacie (hlavné) vlákno, opäť si vytvorí socket, nastaví socket a odosielač si zostaví paket (v tomto prípade \verb|SYN TCP|) a odosiela paket po jednom na port daný indexom v vektore \verb|tcpTargetPorts| a čaká štandartne (viz. Implementované rozšírenia) 2 sekundy na odpoveď. Po danom čase, nazrie do premennej \verb|tcpPortStates| a na základe jej hodnoty vypíše, či daný port je zatvorený, otvorený  alebo filtrovaný. Ak nastane prípad, že port je filtrovaný, štandartne odosielač odosiela znova 1 \verb|SYN TCP| packet (viz. Implementované rozšírenia) aby sa overilo, či sa daný paket nestratil a port je skutočne filtrovaný. \par 
+Po dokončení odosielania a prímania paketov, odosielacie vlákno ukončuje odchytávanie filtru pomocou \verb|pcap_breakloop| a čaká na dokončenie odchytávacích vlákien pomocou \verb|join|.
+
+\newpage
+\section{Implementované rozšírenia}
+Počas implementácie hlavných funkcií skeneru, ma napadlo implementovať zopár rozšírení, ktoré mi prišli dosť užitočné pre pohodlné a pokročilejšie skenovanie portov.
+
+\subsection{Počet opätovných zasielaní TCP/UDP paketu}
+Parameter: \verb|-rt <nasobok-opakovania-int>| a \verb|-ru <nasobok-opakovania-int>|\newline \newline
+Toto rozšírenie poskytuje uživatelovi zadať, počet kolko krát má skener opakovať odosielanie buď \verb|TCP-SYN| alebo \verb|UDP| paketu, ak port je filtrovaný alebo otvorený.\newline
+Príklad použitia:\newline
+
+\verb|sudo ./ipk-scan -pt 1-100 -pu 1-100 merlin.fit.vutbr.cz -rt 3 -ru 2| \newline
+
+Výsledok: Ak jeden z portov TCP bude filtrovaný, odosielanie \verb|SYN TCP| packetu sa bude opakovať maximálne 3 krát. Ak jeden z portov \verb|UDP| bude otvorený, odosielanie \verb|UDP| paketu sa bude opakovať maximálne 2 krát.
+Štandartne je táto hodnota inicializovaná na hodnotu 1 opakovanie.
+\subsection{Doba čakania na odpoveď od portu}
+Parameter: \verb|-wt <doba-cakania-sekundy>| a \verb|-wu <doba-cakania-sekundy>|\newline \newline
+Toto rozšírenie poskytuje uživatelovi zadať dĺžku doby (v sekundách), kolko má skener (odosielacie vlákno) čakať na odpoveď od portu.\newline
+Príklad použitia:\newline
+
+\verb|sudo ./ipk-scan -pt 1-100 -pu 1-100 merlin.fit.vutbr.cz -wt 3 -wu 2.5| \newline
+
+Výsledok: Skener (odosielacie vlákno) bude čakať na odpoveď pri \verb|TCP| skenovaní 3 sekundy a pri \verb|UDP| skenovaní 2 sekundy.
+Štandartne je táto hodnota inicializovaná na hodnotu 2.5 sekundy.
+\cite{rfc793}
+\newpage
+\section{Použité materiály}
+\begin{thebibliography}{999}
+\bibitem{rfc793}
+	RFC 793 - Transmission Control Protocol,
+	\url{https://tools.ietf.org/html/rfc793}
+\bibitem{rfc791}
+	RFC 791 - Internet Protocol
+	\url{https://tools.ietf.org/html/rfc791}
+\bibitem{rfc768}
+	RFC 768 - User Datagram Protocol
+	\url{https://tools.ietf.org/html/rfc768}
+\bibitem{rfc1071}
+	RFC 1071 - Computing the Internet Checksum
+	\url{https://tools.ietf.org/html/rfc1071}
+\bibitem{checksum}
+	How is TCP & UDP Checksum Calculated?
+	\url{https://www.slashroot.in/how-is-tcp-and-udp-checksum-calculated}
+\bibitem{veselyguide}
+	Raw socket examples, taken checksum
+	\url{https://www.tenouk.com/Module43a.html}
+\bibitem{brieftut}
+	A brief programming tutorial in C for raw sockets
+	\url{http://www.cs.binghamton.edu/~steflik/cs455/rawip.txt}
+\bibitem{manpages}
+	RAW, SOCKET, IP, TCP, UDP man pages
+	\url{https://linux.die.net/man}
+\end{thebibliography}
+
+\newpage
+\end{document}
